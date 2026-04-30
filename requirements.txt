@@ -1,0 +1,28 @@
+# Streamlit & Web API
+streamlit>=1.41
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.7,<3
+pydantic-core>=2.18
+python-multipart>=0.0.6
+
+# Database
+sqlalchemy>=2.0.0
+
+# LLM & Vector Store
+google-generativeai>=0.8
+langchain>=0.3
+langchain-core>=0.3
+langchain-community>=0.4
+langchain-google-genai>=1.0
+langchain-text-splitters>=1.0
+faiss-cpu>=1.8.0
+
+# Document Processing
+pypdf>=6.0
+PyPDF2>=3.0
+
+# Utilities
+python-dotenv>=1.0
+packaging>=20,<25
+numpy>=1.24.0
