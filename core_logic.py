@@ -16,7 +16,7 @@ if not GOOGLE_API_KEY:
 
 # Initialize Models
 embedding_model = GoogleGenerativeAIEmbeddings(
-    model="models/embedding-001",
+    model="models/gemini-embedding-001",
     google_api_key=GOOGLE_API_KEY
 )
 
