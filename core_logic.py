@@ -110,73 +110,38 @@ def get_conversational_response(query: str, chat_memory: list = None, vectorstor
         chat_memory = []
         
     try:
-        # Step 1: Check if question is related to client's domain
-        raw_restricted = llm.invoke(restrict_prompt.format(client_name=client_name, question=query)).content
-        if isinstance(raw_restricted, list):
-            restricted_answer = "".join([r.get("text", "") for r in raw_restricted if r.get("type") == "text"])
-        else:
-            restricted_answer = str(raw_restricted)
-
-        if "❌" in restricted_answer:
-            return restricted_answer, chat_memory
-
-        # Step 2: Try PDF retrieval if available
-        pdf_answer = ""
+        context = ""
         if vectorstore:
             try:
                 docs = vectorstore.similarity_search(query, k=3)
                 if docs:
                     context = "\n".join([d.page_content for d in docs])
-                    retrieval_prompt = f"""Based on the following information, answer the question in a friendly, conversational manner. Keep the answer short and directly useful. Do NOT use any markdown symbols like asterisks (*) or bold text.
-
-Information:
-{context}
-
-Question: {query}
-
-Answer:"""
-                    response = llm.invoke(retrieval_prompt).content
-                    if isinstance(response, list):
-                        pdf_answer = "".join([r.get("text", "") for r in response if r.get("type") == "text"]).strip()
-                    else:
-                        pdf_answer = str(response).strip()
             except Exception as e:
                 print(f"Retrieval error: {e}")
-                pdf_answer = ""
 
-        # Step 3: Decide response
-        weak_pdf = (
-            not pdf_answer
-            or "i don't know" in pdf_answer.lower()
-            or "not included" in pdf_answer.lower()
-            or "does not contain" in pdf_answer.lower()
-            or "not available" in pdf_answer.lower()
-            or "sorry" in pdf_answer.lower()
-        )
-
-        if weak_pdf:
-            general_prompt = f"""
-You are a friendly Help Desk Assistant for {client_name}.
-
-Question: {query}
+        prompt = f"""You are a friendly Help Desk Assistant for {client_name}.
 
 Important Rules:
-- Keep the response short, human-like, and highly structured.
-- Do NOT use markdown symbols, asterisks (*), or bold text. Use plain text formatting.
-- Provide a helpful, generic answer tailored to {client_name}.
+1. Use the provided Context Information to answer the User Question if applicable.
+2. If the user's question is completely unrelated to {client_name}'s domain or the Context, and is NOT a simple greeting, reply exactly with: "❌ Sorry, I can only help with queries related to {client_name}."
+3. Keep the answer short, direct, and conversational.
+4. Do NOT use markdown symbols like asterisks (*) or bold text. Use plain text formatting.
 
-Answer:
-"""
-            raw_response = llm.invoke(general_prompt).content
-            if isinstance(raw_response, list):
-                response = "".join([r.get("text", "") for r in raw_response if r.get("type") == "text"])
-            else:
-                response = str(raw_response)
+Context Information:
+{context if context else 'No specific context available. Use general knowledge about ' + client_name + '.'}
+
+User Question: {query}
+
+Answer:"""
+
+        raw_response = llm.invoke(prompt).content
+        if isinstance(raw_response, list):
+            response = "".join([r.get("text", "") for r in raw_response if r.get("type") == "text"]).strip()
         else:
-            response = str(pdf_answer)
+            response = str(raw_response).strip()
 
         chat_memory.append((query, response))
         return response, chat_memory
     except Exception as e:
         print(f"Error generating response: {e}")
-        return "❌ Sorry, I encountered an error. Please try again.", chat_memory
+        return "❌ Sorry, I encountered an error connecting to the AI. Please try again.", chat_memory
