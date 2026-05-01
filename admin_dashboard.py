@@ -26,6 +26,7 @@ if page == "Manage API Keys":
             new_key = APIKey(owner_name=owner_name)
             db.add(new_key)
             db.commit()
+            db.refresh(new_key)
             st.success(f"Generated new key for {owner_name}: `{new_key.key}`")
             db.close()
             
