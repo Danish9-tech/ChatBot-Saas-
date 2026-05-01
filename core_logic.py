@@ -1,9 +1,8 @@
 import os
-import json
 from langchain_community.vectorstores import FAISS
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_text_splitters import CharacterTextSplitter
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader, CSVLoader, Docx2txtLoader, WebBaseLoader
 from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 
@@ -26,68 +25,93 @@ llm = ChatGoogleGenerativeAI(
     google_api_key=GOOGLE_API_KEY
 )
 
-def load_knowledge_base():
-    """Load knowledge.json"""
-    knowledge_file = "knowledge.json"
-    try:
-        if os.path.exists(knowledge_file):
-            with open(knowledge_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return []
-    except Exception as e:
-        print(f"Error loading knowledge file: {e}")
-        return []
+# Cache for vector stores: {api_key_id: FAISS}
+vector_stores_cache = {}
 
-def load_and_split_pdfs(folder_path="knowledge"):
-    """Load PDF documents from folder"""
+def load_and_split_documents(folder_path):
+    """Load various documents from folder and URLs"""
     docs = []
     try:
         if not os.path.exists(folder_path):
             os.makedirs(folder_path, exist_ok=True)
             
         for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
             if filename.lower().endswith(".pdf"):
-                pdf_path = os.path.join(folder_path, filename)
-                loader = PyPDFLoader(pdf_path)
-                docs.extend(loader.load())
+                docs.extend(PyPDFLoader(file_path).load())
+            elif filename.lower().endswith(".txt") and filename.lower() != "urls.txt":
+                docs.extend(TextLoader(file_path, encoding='utf-8').load())
+            elif filename.lower().endswith(".csv"):
+                docs.extend(CSVLoader(file_path, encoding='utf-8').load())
+            elif filename.lower().endswith(".docx"):
+                docs.extend(Docx2txtLoader(file_path).load())
+            elif filename.lower() == "urls.txt":
+                with open(file_path, "r", encoding="utf-8") as f:
+                    urls = [line.strip() for line in f.readlines() if line.strip()]
+                if urls:
+                    try:
+                        docs.extend(WebBaseLoader(urls).load())
+                    except Exception as ue:
+                        print(f"Error scraping URLs: {ue}")
     except Exception as e:
-        print(f"Error loading PDFs: {e}")
+        print(f"Error loading documents from {folder_path}: {e}")
 
     if docs:
         splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
         return splitter.split_documents(docs)
     return []
 
-def initialize_vector_store():
-    """Initialize FAISS vector store"""
-    try:
-        docs = load_and_split_pdfs("knowledge")
-        if docs:
+def get_vector_store(api_key_id: int):
+    """Retrieve vector store for a specific client"""
+    if api_key_id in vector_stores_cache:
+        return vector_stores_cache[api_key_id]
+        
+    folder_path = os.path.join("knowledge", str(api_key_id))
+    docs = load_and_split_documents(folder_path)
+    
+    if docs:
+        try:
             vectorstore = FAISS.from_documents(docs, embedding_model)
+            vector_stores_cache[api_key_id] = vectorstore
             return vectorstore
-        return None
-    except Exception as e:
-        print(f"Error creating vector store: {e}")
-        return None
+        except Exception as e:
+            print(f"Error creating FAISS index for {api_key_id}: {e}")
+            return None
+    return None
+
+def update_vector_store(api_key_id: int):
+    """Force rebuild the vector store for a specific client"""
+    folder_path = os.path.join("knowledge", str(api_key_id))
+    docs = load_and_split_documents(folder_path)
+    if docs:
+        try:
+            vectorstore = FAISS.from_documents(docs, embedding_model)
+            vector_stores_cache[api_key_id] = vectorstore
+        except Exception as e:
+            print(f"Error updating FAISS index for {api_key_id}: {e}")
+    else:
+        # If no docs are found, clear the cache for this client
+        if api_key_id in vector_stores_cache:
+            del vector_stores_cache[api_key_id]
 
 restrict_prompt = ChatPromptTemplate.from_template("""
-You are a friendly and helpful University Help Desk Assistant for Iqra University (Airport Campus).
+You are a friendly and helpful Assistant for {client_name}.
 Rules:
-- Only answer university-related questions (admissions, exams, courses, fees, schedules, faculty, hostel, campus services, campus locations).
-- If the question is unrelated, reply exactly: "❌ Sorry, I can only help with university-related queries."
+- Only answer questions related to {client_name}'s domain and services.
+- If the question is completely unrelated, reply exactly: "❌ Sorry, I can only help with queries related to {client_name}."
 - Keep your answers short, concise, and structured in a human-like manner.
 - Do NOT use raw markdown formatting, asterisks (*), or bold text. Use plain text formatting.
 Question: {question}
 """)
 
-def get_conversational_response(query: str, chat_memory: list = None, vectorstore=None) -> tuple[str, list]:
+def get_conversational_response(query: str, chat_memory: list = None, vectorstore=None, client_name: str = "our service") -> tuple[str, list]:
     """Get response from conversational chain"""
     if chat_memory is None:
         chat_memory = []
         
     try:
-        # Step 1: Check if question is university-related
-        raw_restricted = llm.invoke(restrict_prompt.format(question=query)).content
+        # Step 1: Check if question is related to client's domain
+        raw_restricted = llm.invoke(restrict_prompt.format(client_name=client_name, question=query)).content
         if isinstance(raw_restricted, list):
             restricted_answer = "".join([r.get("text", "") for r in raw_restricted if r.get("type") == "text"])
         else:
@@ -131,37 +155,23 @@ Answer:"""
         )
 
         if weak_pdf:
-            # Maybe fallback to knowledge.json matching
-            kb = load_knowledge_base()
-            kb_answer = None
-            q_lower = query.lower()
-            for entry in kb:
-                if any(kw.lower() in q_lower for kw in entry.get("keywords", [])):
-                    kb_answer = entry.get("answer")
-                    break
-            
-            if kb_answer:
-                response = kb_answer
-            else:
-                general_prompt = f"""
-You are a friendly University Help Desk Assistant for Iqra University.
+            general_prompt = f"""
+You are a friendly Help Desk Assistant for {client_name}.
 
 Question: {query}
 
 Important Rules:
 - Keep the response short, human-like, and highly structured.
 - Do NOT use markdown symbols, asterisks (*), or bold text. Use plain text formatting.
-- Do NOT reply with "I don't know" or "I'm sorry".
-- Provide a helpful, generic, university-style answer tailored to Iqra University.
-- Use natural phrases like: "Usually, universities require..." or "Typically, students need to..."
+- Provide a helpful, generic answer tailored to {client_name}.
 
 Answer:
 """
-                raw_response = llm.invoke(general_prompt).content
-                if isinstance(raw_response, list):
-                    response = "".join([r.get("text", "") for r in raw_response if r.get("type") == "text"])
-                else:
-                    response = str(raw_response)
+            raw_response = llm.invoke(general_prompt).content
+            if isinstance(raw_response, list):
+                response = "".join([r.get("text", "") for r in raw_response if r.get("type") == "text"])
+            else:
+                response = str(raw_response)
         else:
             response = str(pdf_answer)
 

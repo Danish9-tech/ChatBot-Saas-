@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from database import get_db, APIKey, ChatSession, ChatMessage
-from core_logic import get_conversational_response, initialize_vector_store
+from core_logic import get_conversational_response, get_vector_store
 
 app = FastAPI(title="University Help Desk SaaS API")
 
@@ -22,13 +22,7 @@ app.add_middleware(
 # Mount static files for the widget
 app.mount("/public", StaticFiles(directory="public"), name="public")
 
-# Initialize Vector Store on startup
-vectorstore = None
-
-@app.on_event("startup")
-def startup_event():
-    global vectorstore
-    vectorstore = initialize_vector_store()
+# Vector stores are now initialized dynamically per API Key on demand
 
 # Models
 class ChatRequest(BaseModel):
@@ -77,7 +71,13 @@ async def chat_endpoint(request: ChatRequest, api_key: APIKey = Depends(verify_a
             temp_q = None
 
     # Get response
-    answer, _ = get_conversational_response(request.query, chat_memory, vectorstore)
+    vectorstore = get_vector_store(api_key.id)
+    answer, _ = get_conversational_response(
+        query=request.query, 
+        chat_memory=chat_memory, 
+        vectorstore=vectorstore, 
+        client_name=api_key.owner_name or "our service"
+    )
 
     # Save to DB
     user_msg = ChatMessage(session_id=chat_session.id, sender="user", message=request.query)

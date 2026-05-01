@@ -3,6 +3,7 @@ import os
 from database import SessionLocal, APIKey, ChatSession, ChatMessage
 import uuid
 import shutil
+from core_logic import update_vector_store
 
 st.set_page_config(page_title="Chatbot Admin Dashboard", page_icon="⚙️", layout="wide")
 st.title("⚙️ SaaS Admin Dashboard")
@@ -56,15 +57,39 @@ elif page == "View Chat Logs":
 
 elif page == "Knowledge Base":
     st.header("📚 Upload Knowledge Documents")
-    st.write("Upload PDF documents to train your chatbot.")
+    st.write("Upload PDF documents to train your chatbot for a specific client.")
     
-    uploaded_files = st.file_uploader("Choose PDFs", type="pdf", accept_multiple_files=True)
-    if st.button("Upload & Train"):
-        if uploaded_files:
-            os.makedirs("knowledge", exist_ok=True)
-            for file in uploaded_files:
-                with open(os.path.join("knowledge", file.name), "wb") as f:
-                    f.write(file.getbuffer())
-            st.success("Files uploaded successfully! The vector store will automatically use them on the next query/startup.")
-        else:
-            st.warning("Please select files first.")
+    db = get_db_session()
+    keys = db.query(APIKey).all()
+    
+    if not keys:
+        st.warning("Please create an API Key in 'Manage API Keys' first.")
+    else:
+        # Create a mapping of display name to ID
+        client_options = {f"{k.owner_name} (ID: {k.id})": k.id for k in keys}
+        selected_client_name = st.selectbox("Select Client", list(client_options.keys()))
+        selected_client_id = client_options[selected_client_name]
+        
+        urls_input = st.text_area("Website URLs (one per line, optional)", help="The AI will scrape and learn from these URLs.")
+        uploaded_files = st.file_uploader(f"Choose Documents for {selected_client_name.split(' (')[0]}", type=["pdf", "txt", "docx", "csv"], accept_multiple_files=True)
+        
+        if st.button("Upload & Train"):
+            if uploaded_files or urls_input.strip():
+                client_knowledge_dir = os.path.join("knowledge", str(selected_client_id))
+                os.makedirs(client_knowledge_dir, exist_ok=True)
+                
+                for file in uploaded_files:
+                    with open(os.path.join(client_knowledge_dir, file.name), "wb") as f:
+                        f.write(file.getbuffer())
+                
+                if urls_input.strip():
+                    with open(os.path.join(client_knowledge_dir, "urls.txt"), "w", encoding="utf-8") as f:
+                        f.write(urls_input.strip())
+                
+                with st.spinner("Training Vector Store..."):
+                    update_vector_store(selected_client_id)
+                
+                st.success("Knowledge Base updated successfully! The AI has been trained for this client.")
+            else:
+                st.warning("Please select files or enter URLs first.")
+    db.close()

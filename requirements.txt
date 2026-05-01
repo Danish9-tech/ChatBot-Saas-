@@ -21,6 +21,8 @@ faiss-cpu>=1.8.0
 # Document Processing
 pypdf>=6.0
 PyPDF2>=3.0
+beautifulsoup4>=4.12
+docx2txt>=0.8
 
 # Utilities
 python-dotenv>=1.0
