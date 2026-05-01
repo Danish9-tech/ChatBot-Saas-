@@ -84,13 +84,22 @@ elif page == "Knowledge Base":
                         f.write(file.getbuffer())
                 
                 if urls_input.strip():
+                    cleaned_urls = []
+                    for line in urls_input.split('\n'):
+                        line = line.strip()
+                        if line:
+                            if not line.startswith('http'):
+                                line = 'http://' + line
+                            cleaned_urls.append(line)
                     with open(os.path.join(client_knowledge_dir, "urls.txt"), "w", encoding="utf-8") as f:
-                        f.write(urls_input.strip())
+                        f.write('\n'.join(cleaned_urls))
                 
                 with st.spinner("Training Vector Store..."):
-                    update_vector_store(selected_client_id)
-                
-                st.success("Knowledge Base updated successfully! The AI has been trained for this client.")
+                    try:
+                        update_vector_store(selected_client_id)
+                        st.success("Knowledge Base updated successfully! The AI has been trained for this client.")
+                    except Exception as e:
+                        st.error(f"Failed to train: {str(e)}")
             else:
                 st.warning("Please select files or enter URLs first.")
     db.close()

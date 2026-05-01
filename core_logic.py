@@ -77,19 +77,22 @@ def update_vector_store(api_key_id: int):
     """Force rebuild the vector store for a specific client"""
     folder_path = os.path.join("knowledge", str(api_key_id))
     docs = load_and_split_documents(folder_path)
-    if docs:
-        try:
-            connection_string = get_db_connection_string(for_sqlalchemy=True)
-            # Delete old collection to prevent duplicates and insert new docs
-            PGVector.from_documents(
-                documents=docs,
-                embedding=embedding_model,
-                collection_name=f"client_{api_key_id}",
-                connection_string=connection_string,
-                pre_delete_collection=True
-            )
-        except Exception as e:
-            print(f"Error updating PGVector index for {api_key_id}: {e}")
+    if not docs:
+        raise ValueError("No valid text could be extracted from the provided files or URLs.")
+    
+    try:
+        connection_string = get_db_connection_string(for_sqlalchemy=True)
+        # Delete old collection to prevent duplicates and insert new docs
+        PGVector.from_documents(
+            documents=docs,
+            embedding=embedding_model,
+            collection_name=f"client_{api_key_id}",
+            connection_string=connection_string,
+            pre_delete_collection=True
+        )
+    except Exception as e:
+        print(f"Error updating PGVector index for {api_key_id}: {e}")
+        raise RuntimeError(f"Database error while saving knowledge: {str(e)}")
 
 restrict_prompt = ChatPromptTemplate.from_template("""
 You are a friendly and helpful Assistant for {client_name}.
