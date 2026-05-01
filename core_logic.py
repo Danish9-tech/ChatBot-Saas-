@@ -1,5 +1,6 @@
 import os
-from langchain_community.vectorstores import FAISS
+from langchain_community.vectorstores import PGVector
+from database import get_db_connection_string
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 from langchain_text_splitters import CharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader, TextLoader, CSVLoader, Docx2txtLoader, WebBaseLoader
@@ -24,9 +25,6 @@ llm = ChatGoogleGenerativeAI(
     temperature=0.3,
     google_api_key=GOOGLE_API_KEY
 )
-
-# Cache for vector stores: {api_key_id: FAISS}
-vector_stores_cache = {}
 
 def load_and_split_documents(folder_path):
     """Load various documents from folder and URLs"""
@@ -62,22 +60,18 @@ def load_and_split_documents(folder_path):
     return []
 
 def get_vector_store(api_key_id: int):
-    """Retrieve vector store for a specific client"""
-    if api_key_id in vector_stores_cache:
-        return vector_stores_cache[api_key_id]
-        
-    folder_path = os.path.join("knowledge", str(api_key_id))
-    docs = load_and_split_documents(folder_path)
-    
-    if docs:
-        try:
-            vectorstore = FAISS.from_documents(docs, embedding_model)
-            vector_stores_cache[api_key_id] = vectorstore
-            return vectorstore
-        except Exception as e:
-            print(f"Error creating FAISS index for {api_key_id}: {e}")
-            return None
-    return None
+    """Retrieve vector store for a specific client from Supabase"""
+    connection_string = get_db_connection_string(for_sqlalchemy=True)
+    try:
+        vectorstore = PGVector(
+            collection_name=f"client_{api_key_id}",
+            connection_string=connection_string,
+            embedding_function=embedding_model,
+        )
+        return vectorstore
+    except Exception as e:
+        print(f"Error connecting to PGVector for {api_key_id}: {e}")
+        return None
 
 def update_vector_store(api_key_id: int):
     """Force rebuild the vector store for a specific client"""
@@ -85,14 +79,17 @@ def update_vector_store(api_key_id: int):
     docs = load_and_split_documents(folder_path)
     if docs:
         try:
-            vectorstore = FAISS.from_documents(docs, embedding_model)
-            vector_stores_cache[api_key_id] = vectorstore
+            connection_string = get_db_connection_string(for_sqlalchemy=True)
+            # Delete old collection to prevent duplicates and insert new docs
+            PGVector.from_documents(
+                documents=docs,
+                embedding=embedding_model,
+                collection_name=f"client_{api_key_id}",
+                connection_string=connection_string,
+                pre_delete_collection=True
+            )
         except Exception as e:
-            print(f"Error updating FAISS index for {api_key_id}: {e}")
-    else:
-        # If no docs are found, clear the cache for this client
-        if api_key_id in vector_stores_cache:
-            del vector_stores_cache[api_key_id]
+            print(f"Error updating PGVector index for {api_key_id}: {e}")
 
 restrict_prompt = ChatPromptTemplate.from_template("""
 You are a friendly and helpful Assistant for {client_name}.
