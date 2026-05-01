@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException, Header, Request
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -21,6 +22,10 @@ app.add_middleware(
 
 # Mount static files for the widget
 app.mount("/public", StaticFiles(directory="public"), name="public")
+
+@app.get("/")
+def read_root():
+    return RedirectResponse(url="/public/index.html")
 
 # Vector stores are now initialized dynamically per API Key on demand
 
