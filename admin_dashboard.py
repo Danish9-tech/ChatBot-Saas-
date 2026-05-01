@@ -72,16 +72,21 @@ elif page == "Knowledge Base":
         selected_client_id = client_options[selected_client_name]
         
         urls_input = st.text_area("Website URLs (one per line, optional)", help="The AI will scrape and learn from these URLs.")
+        direct_text_input = st.text_area("Direct Text (optional)", height=150, help="Paste any plain text you want the AI to learn.")
         uploaded_files = st.file_uploader(f"Choose Documents for {selected_client_name.split(' (')[0]}", type=["pdf", "txt", "docx", "csv"], accept_multiple_files=True)
         
         if st.button("Upload & Train"):
-            if uploaded_files or urls_input.strip():
+            if uploaded_files or urls_input.strip() or direct_text_input.strip():
                 client_knowledge_dir = os.path.join("knowledge", str(selected_client_id))
                 os.makedirs(client_knowledge_dir, exist_ok=True)
                 
                 for file in uploaded_files:
                     with open(os.path.join(client_knowledge_dir, file.name), "wb") as f:
                         f.write(file.getbuffer())
+                
+                if direct_text_input.strip():
+                    with open(os.path.join(client_knowledge_dir, "direct_text.txt"), "w", encoding="utf-8") as f:
+                        f.write(direct_text_input.strip())
                 
                 if urls_input.strip():
                     cleaned_urls = []
@@ -101,5 +106,5 @@ elif page == "Knowledge Base":
                     except Exception as e:
                         st.error(f"Failed to train: {str(e)}")
             else:
-                st.warning("Please select files or enter URLs first.")
+                st.warning("Please select files, enter URLs, or paste text first.")
     db.close()
