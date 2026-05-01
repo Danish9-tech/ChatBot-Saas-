@@ -1,16 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>University Website Example</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; margin: 0; padding: 0; color: #333; }
-        header { background: #1e3a8a; color: white; text-align: center; padding: 2rem; }
-        .container { max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
-        .hero { background: #f0fdf4; padding: 2rem; border-radius: 8px; margin-bottom: 2rem; border-left: 4px solid #16a34a; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+
+        header {
+            background: #1e3a8a;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .hero {
+            background: #f0fdf4;
+            padding: 2rem;
+            border-radius: 8px;
+            margin-bottom: 2rem;
+            border-left: 4px solid #16a34a;
+        }
     </style>
 </head>
+
 <body>
 
     <header>
@@ -21,16 +47,19 @@
     <div class="container">
         <div class="hero">
             <h2>Admissions are open!</h2>
-            <p>Apply now for the upcoming semester. If you have any questions, feel free to ask our AI assistant by clicking the chat bubble in the bottom right corner.</p>
+            <p>Apply now for the upcoming semester. If you have any questions, feel free to ask our AI assistant by
+                clicking the chat bubble in the bottom right corner.</p>
         </div>
-        
+
         <h3>About Us</h3>
         <p>We are dedicated to providing the best education and campus facilities.</p>
-        
+
         <!-- Chatbot Embed Script -->
         <!-- In production, provide an actual API Key generated from the admin dashboard -->
-        <script src="http://localhost:8000/public/chatbot.js" data-api-key="025ec29d-0d4a-4319-925b-009286fc6f6d"></script>
+        <script src="https://chatbot-saas-lnc8.onrender.com/public/chatbot.js"
+            data-api-key="d1fe1d95-96f2-477f-bac1-22f5ea23205b"></script>
     </div>
 
 </body>
+
 </html>
