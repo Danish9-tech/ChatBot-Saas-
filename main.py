@@ -51,9 +51,17 @@ def verify_api_key(x_api_key: str = Header(...), db: Session = Depends(get_db)):
 @app.post("/api/v1/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest, api_key: APIKey = Depends(verify_api_key), db: Session = Depends(get_db)):
     # Get or create session
+    import uuid
     if request.session_id:
-        chat_session = db.query(ChatSession).filter(ChatSession.id == request.session_id, ChatSession.api_key_id == api_key.id).first()
-        if not chat_session:
+        chat_session = db.query(ChatSession).filter(ChatSession.id == request.session_id).first()
+        if chat_session:
+            if chat_session.api_key_id != api_key.id:
+                # Session exists but for a different API key! Prevent IntegrityError.
+                request.session_id = f"sess_{uuid.uuid4().hex[:9]}"
+                chat_session = ChatSession(id=request.session_id, api_key_id=api_key.id)
+                db.add(chat_session)
+                db.commit()
+        else:
             chat_session = ChatSession(id=request.session_id, api_key_id=api_key.id)
             db.add(chat_session)
             db.commit()

@@ -202,6 +202,10 @@ class IU_Chatbot {
 
             if (res.ok) {
                 const data = await res.json();
+                if (data.session_id) {
+                    this.sessionId = data.session_id;
+                    localStorage.setItem('iu_chatbot_session_id', this.sessionId);
+                }
                 this.appendMessage(data.answer, 'bot');
             } else {
                 this.appendMessage("Sorry, I'm having trouble connecting to the server.", 'bot');
